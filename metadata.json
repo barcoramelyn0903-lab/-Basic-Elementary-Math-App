@@ -1,0 +1,8 @@
+{
+  "name": "Jungle Math Adventure",
+  "description": "Fun, interactive, and colorful elementary math learning game for kids ages 6-9 featuring jungle quests, friendly animals, and rewarding treasure collection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

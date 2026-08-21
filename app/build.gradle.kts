@@ -1,139 +1,251 @@
-import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+name: Build Android APK
 
-plugins {
-  alias(libs.plugins.android.application)
-  alias(libs.plugins.kotlin.compose)
-  alias(libs.plugins.google.devtools.ksp)
-  alias(libs.plugins.roborazzi)
-  alias(libs.plugins.secrets)
-  alias(libs.plugins.google.services)
-}
+on:
+  push:
+    branches:
+      - main
+      - master
 
-android {
-  namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  pull_request:
+    branches:
+      - main
+      - master
 
-  defaultConfig {
-    applicationId = "com.aistudio.junglemath.kvytrw"
-    minSdk = 24
-    targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+  workflow_dispatch:
 
-    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
+permissions:
+  contents: read
 
-  signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
-    }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
-    }
-  }
+jobs:
+  build:
+    name: Build Jungle Math APK
+    runs-on: ubuntu-latest
 
-  buildTypes {
-    release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
-    }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
-  }
-  compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-  }
-  buildFeatures {
-    compose = true
-    buildConfig = true
-  }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
-  dependenciesInfo {
-    includeInApk = false
-    includeInBundle = true
-  }
-}
+    steps:
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
-secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
-  ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
-}
+      # --------------------------------------------------
+      # 1. Checkout source code
+      # --------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
+      # --------------------------------------------------
+      # 2. Install Java 17
+      # --------------------------------------------------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
-// Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
-dependencies {
-  implementation(platform(libs.androidx.compose.bom))
-  implementation(platform(libs.firebase.bom))
-  // implementation(libs.accompanist.permissions)
-  implementation(libs.androidx.activity.compose)
-  // implementation(libs.androidx.camera.camera2)
-  // implementation(libs.androidx.camera.core)
-  // implementation(libs.androidx.camera.lifecycle)
-  // implementation(libs.androidx.camera.view)
-  implementation(libs.androidx.compose.material.icons.core)
-  implementation(libs.androidx.compose.material.icons.extended)
-  implementation(libs.androidx.compose.material3)
-  implementation(libs.androidx.compose.ui)
-  implementation(libs.androidx.compose.ui.graphics)
-  implementation(libs.androidx.compose.ui.tooling.preview)
-  implementation(libs.androidx.core.ktx)
-  // implementation(libs.androidx.datastore.preferences)
-  implementation(libs.androidx.lifecycle.runtime.compose)
-  implementation(libs.androidx.lifecycle.runtime.ktx)
-  implementation(libs.androidx.lifecycle.viewmodel.compose)
-  // implementation(libs.androidx.navigation.compose)
-  implementation(libs.androidx.room.ktx)
-  implementation(libs.androidx.room.runtime)
-  // implementation(libs.coil.compose)
-  implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
-  // Uncomment to use Firestore:
-  // implementation(libs.firebase.firestore)
+      # --------------------------------------------------
+      # 3. Install Android SDK
+      # --------------------------------------------------
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-  // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
-  // Sign-In via Credential Manager:
-  // implementation(libs.firebase.auth)
-  // implementation(libs.androidx.credentials)
-  // implementation(libs.androidx.credentials.play.services)
-  // implementation(libs.googleid)
-  implementation(libs.firebase.appcheck.recaptcha)
-  implementation(libs.kotlinx.coroutines.android)
-  implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
-  implementation(libs.okhttp)
-  // implementation(libs.play.services.location)
-  implementation(libs.retrofit)
-  testImplementation(libs.androidx.compose.ui.test.junit4)
-  testImplementation(libs.androidx.core)
-  testImplementation(libs.androidx.junit)
-  testImplementation(libs.junit)
-  testImplementation(libs.kotlinx.coroutines.test)
-  testImplementation(libs.robolectric)
-  testImplementation(libs.roborazzi)
-  testImplementation(libs.roborazzi.compose)
-  testImplementation(libs.roborazzi.junit.rule)
-  androidTestImplementation(platform(libs.androidx.compose.bom))
-  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-  androidTestImplementation(libs.androidx.espresso.core)
-  androidTestImplementation(libs.androidx.junit)
-  androidTestImplementation(libs.androidx.runner)
-  debugImplementation(libs.androidx.compose.ui.test.manifest)
-  debugImplementation(libs.androidx.compose.ui.tooling)
-  "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
-}
+      # --------------------------------------------------
+      # 4. Install required Android SDK components
+      # --------------------------------------------------
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses || true
+
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      # --------------------------------------------------
+      # 5. Find Android project
+      # --------------------------------------------------
+      - name: Locate Android project
+        shell: bash
+        run: |
+          echo "Current directory:"
+          pwd
+
+          echo ""
+          echo "Repository contents:"
+          ls -la
+
+          echo ""
+          echo "Searching for settings.gradle.kts:"
+          find . -maxdepth 3 -name "settings.gradle.kts" -print
+
+          echo ""
+          echo "Searching for app module:"
+          find . -maxdepth 4 -type d -name "app" -print
+
+      # --------------------------------------------------
+      # 6. Determine project directory
+      # --------------------------------------------------
+      - name: Determine project directory
+        id: project
+        shell: bash
+        run: |
+          if [ -f "settings.gradle.kts" ] && [ -d "app" ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+            echo "Android project is repository root."
+          elif [ -f "-Basic-Elementary-Math-App/settings.gradle.kts" ] && \
+               [ -d "-Basic-Elementary-Math-App/app" ]; then
+            echo "dir=-Basic-Elementary-Math-App" >> "$GITHUB_OUTPUT"
+            echo "Android project is inside -Basic-Elementary-Math-App."
+          else
+            echo "ERROR: Android project could not be located."
+            exit 1
+          fi
+
+      # --------------------------------------------------
+      # 7. Generate the debug keystore required by
+      #    app/build.gradle.kts
+      # --------------------------------------------------
+      - name: Generate debug keystore
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          if [ ! -f "debug.keystore" ]; then
+            echo "Generating debug.keystore..."
+
+            keytool -genkeypair \
+              -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+
+            echo "debug.keystore created."
+          else
+            echo "debug.keystore already exists."
+          fi
+
+          ls -lh debug.keystore
+
+      # --------------------------------------------------
+      # 8. Create .env if the project expects it
+      # --------------------------------------------------
+      - name: Prepare environment configuration
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          if [ ! -f ".env" ]; then
+            if [ -f ".env.example" ]; then
+              cp .env.example .env
+              echo ".env created from .env.example."
+            else
+              touch .env
+              echo "Empty .env created."
+            fi
+          fi
+
+      # --------------------------------------------------
+      # 9. Check Gradle project
+      # --------------------------------------------------
+      - name: Verify Gradle project
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          test -f settings.gradle.kts
+          test -f build.gradle.kts
+          test -f app/build.gradle.kts
+
+          echo "Gradle project verified."
+
+      # --------------------------------------------------
+      # 10. Set up Gradle 9.3.1
+      # --------------------------------------------------
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      # --------------------------------------------------
+      # 11. Show versions
+      # --------------------------------------------------
+      - name: Show build environment
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          java -version
+          gradle --version
+          sdkmanager --list_installed | head -100
+
+      # --------------------------------------------------
+      # 12. Clean project
+      # --------------------------------------------------
+      - name: Clean project
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          gradle --no-daemon clean
+
+      # --------------------------------------------------
+      # 13. Build DEBUG APK
+      # --------------------------------------------------
+      - name: Build Debug APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          gradle \
+            --no-daemon \
+            --stacktrace \
+            --info \
+            assembleDebug
+
+      # --------------------------------------------------
+      # 14. Verify APK exists
+      # --------------------------------------------------
+      - name: Verify APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not created."
+            echo ""
+            echo "Available APK files:"
+            find app/build -type f -name "*.apk" -print || true
+            exit 1
+          fi
+
+          echo "APK successfully created:"
+          ls -lh "$APK"
+
+      # --------------------------------------------------
+      # 15. Run Android Lint
+      # --------------------------------------------------
+      - name: Run Android Lint
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          gradle \
+            --no-daemon \
+            lintDebug
+
+      # --------------------------------------------------
+      # 16. Upload APK
+      # --------------------------------------------------
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jungle-math-debug-apk
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      # --------------------------------------------------
+      # 17. Upload lint report if available
+      # --------------------------------------------------
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jungle-math-lint-report
+          path: |
+            ${{ steps.project.outputs.dir }}/app/build/reports/lint-results-debug.html
+            ${{ steps.project.outputs.dir }}/app/build/reports/lint-results-debug.xml
+          if-no-files-found: ignore
+          retention-days: 14

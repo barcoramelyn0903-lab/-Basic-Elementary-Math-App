@@ -11,9 +11,12 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: Build APK
+    name: Build Jungle Math APK
     runs-on: ubuntu-latest
 
     steps:
@@ -27,33 +30,86 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: Check project
+      - name: Verify Android project
+        working-directory: ./-Basic-Elementary-Math-App
         run: |
-          echo "Checking Android project..."
           test -f settings.gradle.kts
-          test -d app
+          test -f app/build.gradle.kts
+          echo "Android project found."
+          pwd
+          ls -la
+
+      - name: Create debug keystore
+        working-directory: ./-Basic-Elementary-Math-App
+        run: |
+          rm -f debug.keystore
+
+          keytool -genkeypair \
+            -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+          echo "Checking generated keystore:"
+          ls -lh debug.keystore
+
+          test -f debug.keystore
+
+      - name: Prepare .env
+        working-directory: ./-Basic-Elementary-Math-App
+        run: |
+          if [ -f .env.example ] && [ ! -f .env ]; then
+            cp .env.example .env
+          elif [ ! -f .env ]; then
+            touch .env
+          fi
+
+      - name: Clean project
+        working-directory: ./-Basic-Elementary-Math-App
+        run: |
+          gradle --no-daemon clean
 
       - name: Build Debug APK
+        working-directory: ./-Basic-Elementary-Math-App
         run: |
-          gradle --no-daemon clean assembleDebug
-
-      - name: Run Android Lint
-        run: |
-          gradle --no-daemon lintDebug
+          gradle \
+            --no-daemon \
+            --stacktrace \
+            assembleDebug
 
       - name: Verify APK
+        working-directory: ./-Basic-Elementary-Math-App
         run: |
           test -f app/build/outputs/apk/debug/app-debug.apk
           ls -lh app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Run Android Lint
+        working-directory: ./-Basic-Elementary-Math-App
+        run: |
+          gradle --no-daemon lintDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: jungle-math-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ./-Basic-Elementary-Math-App/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
